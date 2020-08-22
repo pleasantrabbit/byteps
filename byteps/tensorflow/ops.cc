@@ -891,7 +891,7 @@ XLA_REGISTER_CUSTOM_CALL_TARGET(SyncTensorCustomOp, "CUDA");
 void SyncAllTensorsCustomOp(CUstream stream, void** buffers,
   const char* opaque, size_t opaque_len) {
   int num;
-  int count = 0;
+  int seen_count = 0;
   std::vector<int> buf_sizes;
   std::string tmp_name;
   std::stringstream ss(opaque);
@@ -904,6 +904,10 @@ void SyncAllTensorsCustomOp(CUstream stream, void** buffers,
   while (ss >> tmp_name) {
     int buf_size;
     ss >> buf_size;
+    if (tmp_name == "throwaway_dummy") {
+      seen_count++;
+      continue;
+    }
     auto it = _name_to_done_args.find(tmp_name);
     std::cout << " x2682 " << __FILE__ << ":" << __LINE__ << " in " <<__func__
       << " \nname_key: " << tmp_name << " rank: " << common::byteps_rank() << " waiting" << std::endl;
@@ -913,8 +917,8 @@ void SyncAllTensorsCustomOp(CUstream stream, void** buffers,
       std::unique_lock<std::mutex> lk(args.mtx);
       args.cv.wait(lk, [&args]{return args.is_done;});
     }
-    // cudaMemcpyAsync(buffers[count + num], buffers[count], buf_size, cudaMemcpyDeviceToDevice, stream);
-    cudaMemcpyAsync(buffers[count + num], args.bps_out_buf, buf_size, cudaMemcpyDeviceToDevice, stream);
+    // cudaMemcpyAsync(buffers[seen_count + num], buffers[seen_count], buf_size, cudaMemcpyDeviceToDevice, stream);
+    cudaMemcpyAsync(buffers[seen_count + num], args.bps_out_buf, buf_size, cudaMemcpyDeviceToDevice, stream);
     _name_to_done_args.erase(it);
     // float i0, i1, o0, o1;
     // cudaMemcpy((void *)&i0, ((float *)buffers[count + num]), sizeof(float), cudaMemcpyDeviceToHost);
@@ -923,11 +927,11 @@ void SyncAllTensorsCustomOp(CUstream stream, void** buffers,
     cudaStreamSynchronize(stream);
     // printMatOnGPU(tmp_name, args.bps_out_buf, buf_size/4);
     // BPS_LOG(DEBUG, my_rank) << tmp_name << " first element: " << *((float *)buffers[count + num]) << std::endl;
-    count++;
+    seen_count++;
   }
   std::cout << " x2682 " << __FILE__ << ":" << __LINE__ << " in " <<__func__
-    << " num: " << num << " count: " << count <<std::endl;
-  ASSERTF(num == count, "pos 5");
+    << " num: " << num << " seen_count: " << seen_count <<std::endl;
+  ASSERTF(num == seen_count, "pos 5");
   BPS_LOG(DEBUG, my_rank) << "one pass ended =============================================================" << std::endl;
 }
 
@@ -992,32 +996,34 @@ class BytePSSyncAllTensorsXlaOp : public ::tensorflow::XlaOpKernel {
       std::vector<xla::Shape> tmp_output_shapes;
       // for (auto operand : values) {
       for (int i = 0; i < N; i++) {
-        if (tensor_names_to_sync[i] == "throwaway_dummy" ||
-            tensor_names_to_sync[i].length() == 0) {
-            continue;
-        }
+        // if (tensor_names_to_sync[i] == "throwaway_dummy" ||
+        //     tensor_names_to_sync[i].length() == 0) {
+        //     continue;
+        // }
         const xla::Shape* shape = (ctx->builder()->GetShapePtr(values[i])).ValueOrDie();
         tmp_output_shapes.push_back(*shape);
         valid_values.push_back(values[i]);
       }
-      for (int i = 0; i < N/2; i++) {
-        tmp_output_shapes.push_back(xla::ShapeUtil::MakeShape(xla::F32, {1}));
-      }
+      // for (int i = 0; i < N/2; i++) {
+      //   tmp_output_shapes.push_back(xla::ShapeUtil::MakeShape(xla::F32, {1}));
+      // }
       std::cout << "x2682 len of tmp_output_shapes: " << tmp_output_shapes.size() << std::endl;
 
       auto output_shapes = xla::ShapeUtil::MakeTupleShape(tmp_output_shapes);
       int num_valid_inputs = 0;
       std::cout.setf(std::ios::unitbuf);
       for (const std::string& tmp_name : tensor_names_to_sync) {
-	      std::cout << "x2682 got_name: " << tmp_name << " ";
+        num_valid_inputs++;
+        std::cout << "x2682 got_name: " << tmp_name << " ";
         if (tmp_name == "throwaway_dummy") {
+          std::cout << "counting tmp_name: " << "throwaway_dummy";
           continue;
         }
         if (tmp_name.length() == 0) {
+          std::cout << "counting tmp_name: " << "throwaway_dummy";
           continue;
         }
         std::cout << "counting tmp_name: " << tmp_name;
-        num_valid_inputs++;
       }
       std::cout << std::endl;
       std::cout << " x2682 " << __FILE__ << ":" << __LINE__ << " in " <<__func__
@@ -1031,10 +1037,12 @@ class BytePSSyncAllTensorsXlaOp : public ::tensorflow::XlaOpKernel {
           auto& tmp_name = tensor_names_to_sync[i];
           if (tmp_name == "throwaway_dummy" ||
             tmp_name.length() == 0) {
-              continue;
+            ss << " " << "throwaway_dummy";
+          } else {
+            ss << " " << tmp_name;
           }
+
           int tmp_size = get_buf_size(ctx, i);
-          ss << " " << tmp_name;
           ss << " " << tmp_size;
       }
       ss << std::endl;
@@ -1067,10 +1075,10 @@ class BytePSSyncAllTensorsXlaOp : public ::tensorflow::XlaOpKernel {
         xla::XlaOp tmp_tensor = xla::GetTupleElement(results, i);
         ctx->SetOutput(i, tmp_tensor);
       }
-      for (int i = num_valid_inputs; i < num_valid_inputs * 2; i++) {
-        xla::XlaOp tmp_tensor = xla::GetTupleElement(results, i);
-        ctx->SetOutput(i, tmp_tensor);
-      }
+      // for (int i = num_valid_inputs; i < num_valid_inputs * 2; i++) {
+      //   xla::XlaOp tmp_tensor = xla::GetTupleElement(results, i);
+      //   ctx->SetOutput(i, tmp_tensor);
+      // }
       // method 0 end
     }
 

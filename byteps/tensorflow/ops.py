@@ -174,6 +174,8 @@ def _sync_all_tensors(tensors, grad_names=None):
         tmp_name = _normalize_name(tmp_name)
         tensor_names.append(tmp_name)
 
+    # return C_LIB.byteps_sync_all_tensors(tensors, name=None, tensor_names =
+    #         tensor_names, M = len(tensor_names) // 2 + 1)
     return C_LIB.byteps_sync_all_tensors(tensors, name=None, tensor_names =
             tensor_names, M = len(tensor_names) // 2 + 1)
 

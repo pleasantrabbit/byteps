@@ -1063,23 +1063,38 @@ class BytePSSyncAllTensorsXlaOp : public ::tensorflow::XlaOpKernel {
       // method 2
       // for (int i = 0; i < ctx->num_inputs(); ++i) {
       // std::cout << " x2682 " << __FILE__ << ":" << __LINE__ << " in " <<__func__
-	//         << " output_num_" << i << std::endl;
+      //   << " output_num_" << i << std::endl;
       //   ctx->op_kernel_context()->set_output(i,
       //                                        ctx->op_kernel_context()->input(i));
       // std::cout << " x2682 " << __FILE__ << ":" << __LINE__ << " in " <<__func__
-	//         << " output_num_" << i << " done " << std::endl;
+      //   << " output_num_" << i << " done " << std::endl;
       // }
       // method 2 end
-      // method 0, wrong result
-      for (int i = 0; i < num_valid_inputs; i++) {
-        xla::XlaOp tmp_tensor = xla::GetTupleElement(results, i);
-        ctx->SetOutput(i, tmp_tensor);
-      }
+      // method 0, correct result
+      // for (int i = 0; i < num_valid_inputs; i++) {
+      //   xla::XlaOp tmp_tensor = xla::GetTupleElement(results, i);
+      //   ctx->SetOutput(i, tmp_tensor);
+      // }
       // for (int i = num_valid_inputs; i < num_valid_inputs * 2; i++) {
       //   xla::XlaOp tmp_tensor = xla::GetTupleElement(results, i);
       //   ctx->SetOutput(i, tmp_tensor);
       // }
       // method 0 end
+      // method 3
+      for (int i = 0; i < ctx->num_inputs() / 2; i++) {
+        xla::XlaOp tmp_tensor = xla::GetTupleElement(results, i);
+        ctx->SetOutput(i, tmp_tensor);
+      }
+      for (int i = ctx->num_inputs() / 2; i < ctx->num_inputs(); i++) {
+        std::cout << " x2682 " << __FILE__ << ":" << __LINE__ << " in " <<__func__
+          << " output_num_" << i << std::endl;
+
+        ctx->op_kernel_context()->set_output(i,
+          ctx->op_kernel_context()->input(i));
+
+        std::cout << " x2682 " << __FILE__ << ":" << __LINE__ << " in " <<__func__
+          << " output_num_" << i << " done " << std::endl;
+      }
     }
 
   private:

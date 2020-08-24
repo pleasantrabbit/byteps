@@ -918,7 +918,7 @@ void SyncAllTensorsCustomOp(CUstream stream, void** buffers,
       args.cv.wait(lk, [&args]{return args.is_done;});
     }
     // cudaMemcpyAsync(buffers[seen_count + num], buffers[seen_count], buf_size, cudaMemcpyDeviceToDevice, stream);
-    cudaMemcpyAsync(buffers[seen_count + num], args.bps_out_buf, buf_size, cudaMemcpyDeviceToDevice, stream);
+    // cudaMemcpyAsync(buffers[seen_count + num], args.bps_out_buf, buf_size, cudaMemcpyDeviceToDevice, stream);
     _name_to_done_args.erase(it);
     // float i0, i1, o0, o1;
     // cudaMemcpy((void *)&i0, ((float *)buffers[count + num]), sizeof(float), cudaMemcpyDeviceToHost);
@@ -1001,9 +1001,10 @@ class BytePSSyncAllTensorsXlaOp : public ::tensorflow::XlaOpKernel {
         //     continue;
         // }
         const xla::Shape* shape = (ctx->builder()->GetShapePtr(values[i])).ValueOrDie();
-        tmp_output_shapes.push_back(*shape);
+        // tmp_output_shapes.push_back(*shape);
         valid_values.push_back(values[i]);
       }
+      tmp_output_shapes.push_back(xla::ShapeUtil::MakeShape(xla::F32, {2}));
       // for (int i = 0; i < N/2; i++) {
       //   tmp_output_shapes.push_back(xla::ShapeUtil::MakeShape(xla::F32, {1}));
       // }
@@ -1082,19 +1083,16 @@ class BytePSSyncAllTensorsXlaOp : public ::tensorflow::XlaOpKernel {
       // method 0 end
       // method 3
       for (int i = 0; i < ctx->num_inputs() / 2; i++) {
-        xla::XlaOp tmp_tensor = xla::GetTupleElement(results, i);
-        ctx->SetOutput(i, tmp_tensor);
-      }
-      for (int i = ctx->num_inputs() / 2; i < ctx->num_inputs(); i++) {
-        std::cout << " x2682 " << __FILE__ << ":" << __LINE__ << " in " <<__func__
-          << " output_num_" << i << std::endl;
-
         ctx->op_kernel_context()->set_output(i,
           ctx->op_kernel_context()->input(i));
-
-        std::cout << " x2682 " << __FILE__ << ":" << __LINE__ << " in " <<__func__
-          << " output_num_" << i << " done " << std::endl;
       }
+
+      // for (int i = 0; i < 1; i++) {
+      //   xla::XlaOp tmp_tensor = xla::GetTupleElement(results, i);
+      //   ctx->SetOutput(ctx->num_inputs() / 2 + i, tmp_tensor);
+      // }
+      xla::XlaOp tmp_tensor = xla::GetTupleElement(results, 0);
+      ctx->SetOutput(8, tmp_tensor);
     }
 
   private:
@@ -1103,18 +1101,19 @@ class BytePSSyncAllTensorsXlaOp : public ::tensorflow::XlaOpKernel {
 
 REGISTER_OP("BytepsSyncAllTensors")
     .Input("values: N * T")
-    .Output("sum: N * T")
+    .Output("sum: M * T")
     .Attr("T: {int32, int64, float16, float32, float64}")
     .Attr("N: int >= 1")
+    .Attr("M: int >= 1")
     .Attr("tensor_names: list(string)")
     .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
-      // c->set_output(0, c->input(0));
-      // return ::tensorflow::Status::OK();
-      const int n = c->num_inputs();
-      for (int i = 0; i < n; i++) {
-        c->set_output(i, c->input(i));
-      }
+      c->set_output(0, c->input(0));
       return ::tensorflow::Status::OK();
+      // const int n = c->num_inputs();
+      // for (int i = 0; i < n; i++) {
+      //   c->set_output(i, c->input(i));
+      // }
+      // return ::tensorflow::Status::OK();
     });
 REGISTER_XLA_OP(Name("BytepsSyncAllTensors"), BytePSSyncAllTensorsXlaOp);
 XLA_REGISTER_CUSTOM_CALL_TARGET(SyncAllTensorsCustomOp, "CUDA");

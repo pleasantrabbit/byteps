@@ -430,7 +430,7 @@ if hasattr(tf, 'GradientTape'):
                 new_grad_names = ["throwaway_dummy"] * len(gradients) + grad_names
                 print("xxxxxxxxxxxxxxxxx", grad_names)
                 tmp_avg_grads = self._sync_grads_one_shot(gradients + avg_grads, new_grad_names)
-                tmp_tensor = tf.reshape(tmp_avg_grads[0], [-1])
+                tmp_tensor = tf.reshape(tmp_avg_grads[-1], [-1])
                 avg_grads = tf.cond(tmp_tensor[0] > tmp_tensor[1], lambda: [tf.identity(aa) for aa in avg_grads], lambda: [tf.identity(aa) for aa in avg_grads])
                 # avg_grads = avg_grads[:len(gradients)]
                 # avg_grads = avg_grads[len(gradients):]

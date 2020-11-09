@@ -192,7 +192,9 @@ def push_pull_xla_handle_out_v2(tensor, scope='', average=None, device_dense='',
                           if op == Average else summed_tensor)
         else: # no need to average for async training
             new_tensor = summed_tensor
-    return new_tensor, tensor_name, handle
+    # return new_tensor, tensor_name, handle
+    tensor_decompressed = compression.decompress(new_tensor, ctx)
+    return tensor_decompressed, tensor_name, handle
 
 def push_pull_kickoff(tensor, scope='', average=None, device_dense='', device_sparse='',
               compression=Compression.none, op=None, enable_async=False, idx = 0):
@@ -332,9 +334,13 @@ def push_pull_all_grads_handle_xla(grads, device_dense='', device_sparse='',
 
 def push_pull_all_grads_handle_xla_v2(grads, device_dense='', device_sparse='',
                             compression=Compression.none, sparse_as_dense=False):
+    # return grads
+    # print("xxxxxxxxxxxxxxxxxxxxxx before pushpull")
+    for item in grads:
+        print(item)
     """ returns a list """
-    with tf.name_scope('zzzzDistributedGradientTape' + "_Push_Pull") as scope:
-        if sparse_as_dense:
+    with tf.name_scope('zzzzhhahHaDistributedGradientTape' + "_Push_Pull") as scope:
+        if False and sparse_as_dense:
             grads = [tf.convert_to_tensor(grad)
                      if grad is not None and isinstance(grad, tf.IndexedSlices)
                      else grad for grad in grads]
@@ -350,9 +356,16 @@ def push_pull_all_grads_handle_xla_v2(grads, device_dense='', device_sparse='',
           list(grads_and_names_and_handles[2])
 
     barrier_handle = _my_barrier_handle_out(handles)
-    # avg_grads = [_sync_tensors_handle_out_v2(tensor, barrier_handle, tensor_name=item) for tensor, item in zip(avg_grads, grad_names)]
     avg_grads = [_sync_tensors_handle_out_v2(tensor, barrier_handle, tensor_name=item, idx = idx) for idx, (tensor, item) in enumerate(zip(avg_grads, grad_names), 1)]
+    # only pushpull, and sync, no barrier
+    # avg_grads = [_sync_tensors_handle_out_v2(tensor, handle, tensor_name=item, idx = idx) for idx, (tensor, handle, item) in enumerate(zip(avg_grads, handles, grad_names), 1)]
+    # only pushpull, no barrier and sync
+    # avg_grads = [_sync_tensors_handle_out_v2(tensor, handle, tensor_name=item, idx = idx) for idx, (tensor, handle, item) in enumerate(zip(avg_grads, handles, grad_names), 1)]
+    # avg_grads = [_sync_tensors_handle_out_v2(tensor, barrier_handle, tensor_name=item) for tensor, item in zip(avg_grads, grad_names)]
     # avg_grads = _print_tensors(avg_grads, grad_names)
+    # print("xxxxxxxxxxxxxxxxxxxxxx after pushpull")
+    # for item in avg_grads:
+    #     print(item)
     return avg_grads
 
 def push_pull_all_grads_half_xla_half_tf(grads, device_dense='', device_sparse='',

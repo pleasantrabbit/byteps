@@ -1732,12 +1732,14 @@ class BytepsPushPullXlaOpV2 : public ::tensorflow::XlaOpKernel {
         xla::ShapeUtil::MakeShape(xla::S32, {2}) // handle
       });
       // auto output_shape = xla::ShapeUtil::MakeShape(xla::S32, {2});
-       auto results = xla::CustomCall(context->builder(),
+      auto results = xla::CustomCall(context->builder(),
           /*call_target_name=*/"StartTaskWrapperV2",
           {input_tensor}, output_shape_tuple, ss.str());
 
       auto out_0 = xla::GetTupleElement(results, 0);
       context->SetOutput(0, out_0);
+        // context->op_kernel_context()->set_output(0,
+        //   context->op_kernel_context()->input(0));
       auto out_1 = xla::GetTupleElement(results, 1);
       context->SetOutput(1, out_1);
     }
@@ -1855,11 +1857,11 @@ void StartTaskWrapperV2(CUstream stream, void** buffers,
   // cudaStreamSynchronize(*my_stream);
   // auto ready_event =
   //   std::shared_ptr<common::ReadyEvent>(RecordReadyEvent(*my_stream));
-  // cudaMemcpyAsync(buffers[1], buffers[0], buffer_size, cudaMemcpyDeviceToDevice, stream);
+  cudaMemcpyAsync(buffers[1], buffers[0], buffer_size, cudaMemcpyDeviceToDevice, stream);
   // cudaStreamSynchronize(stream);
   auto ready_event =
     std::shared_ptr<common::ReadyEvent>(RecordReadyEvent(stream));
-
+// return; ///xxxxx
   std::thread t(StartTaskXlaV2, context, tmp_name, bps_output, bps_output, ready_event);
   t.detach();
   BPS_LOG(DEBUG, my_rank) << " x2682 exit " << __func__ << std::flush;
@@ -1965,7 +1967,7 @@ void SyncTensorHandleOutCustomOpV2(CUstream stream, void** buffers,
     num_elem *= dim;
   }
   buffer_size = elem_size * num_elem;
-
+// return; ///xxxxx
   std::unique_lock<std::mutex> my_big_lk(_name_to_done_args_mtx);
   _name_to_done_args_cv.wait(my_big_lk,
     [&tmp_name]{
@@ -2009,7 +2011,7 @@ void SyncTensorHandleOutCustomOpV2(CUstream stream, void** buffers,
     // auto my_stream = byteps::common::BytePSGlobal::GetCopyDevice2DeviceStream();
     // cudaMemcpyAsync(buffers[2], buffers[0], buffer_size, cudaMemcpyDeviceToDevice, *my_stream);
     // cudaStreamSynchronize(*my_stream);
-    // cudaMemcpyAsync(buffers[2], buffers[0], buffer_size, cudaMemcpyDeviceToDevice, stream);
+    cudaMemcpyAsync(buffers[2], buffers[0], buffer_size, cudaMemcpyDeviceToDevice, stream);
     // cudaStreamSynchronize(stream);
     // printMatOnGPU(tmp_name, got_ptr, buffer_size/4);
   }

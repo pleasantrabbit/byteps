@@ -21,7 +21,10 @@ from distutils import log as distutils_logger
 from distutils.version import LooseVersion
 import traceback
 
-import pre_setup
+if os.path.isfile('./pre_setup_local.py'):
+    import pre_setup_local as pre_setup
+else:
+    import pre_setup as pre_setup
 
 server_lib = Extension('byteps.server.c_lib', [])
 tensorflow_lib = Extension('byteps.tensorflow.c_lib', [])
@@ -873,13 +876,13 @@ class custom_build_ext(build_ext):
             if not ucx_path:
                 ucx_path = "https://codeload.github.com/openucx/ucx/zip/9229f54"
             print("ucx_path is", ucx_path)
-            cmd = "apt-get install -y build-essential libtool autoconf automake libnuma-dev unzip;" +\
+            cmd = "sudo apt install -y build-essential libtool autoconf automake libnuma-dev unzip;" +\
             "rm -rf ucx*;" +\
             "curl " + ucx_path + " -o ucx.zip; " + \
                 "unzip -o ./ucx.zip -d tmp; " + \
-                "mkdir -p ucx-build; mv tmp/ucx-*/* ucx-build;" +\
+                "rm -rf ucx-build; mkdir -p ucx-build; mv tmp/ucx-*/* ucx-build/;" +\
                 "cd ucx-build; pwd; which libtoolize; " + \
-                "./autogen.sh; ./autogen.sh && ./contrib/configure-release --enable-mt && make install -j"
+                "./autogen.sh; ./autogen.sh && ./contrib/configure-release --enable-mt && make -j && sudo make install -j"
             make_process = subprocess.Popen(cmd,
                                             cwd='3rdparty',
                                             stdout=sys.stdout,
@@ -985,6 +988,9 @@ class custom_build_ext(build_ext):
 
 
 # Where the magic happens:
+if not os.path.exists('3rdparty/ps-lite/src'):
+    msg = "Missing ./3rdparty/ps-lite, ps-lite is required to build BytePS."
+    raise ValueError(msg)
 
 if os.path.exists('launcher/launch.py'):
     if not os.path.exists('bin'):
